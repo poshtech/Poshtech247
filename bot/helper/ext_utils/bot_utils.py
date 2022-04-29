@@ -106,17 +106,14 @@ def get_progress_bar_string(status):
     p = 0 if total == 0 else round(completed * 100 / total)
     p = min(max(p, 0), 100)
     cFull = p // 8
-    p_str = '■' * cFull
-    p_str += '□' * (12 - cFull)
-    p_str = f"[{p_str}]"
+    p_str = '█' * cFull
+    p_str += '▒' * (12 - cFull)
+    p_str = f"<b>❖ Progress: </b>{p_str}"
     return p_str
 
 def get_readable_message():
     with download_dict_lock:
         msg = ""
-        dlspeed_bytes = 0
-        upspeed_bytes = 0
-        START = 0
         if STATUS_LIMIT is not None:
             tasks = len(download_dict)
             global pages
@@ -124,8 +121,7 @@ def get_readable_message():
             if PAGE_NO > pages and pages != 0:
                 globals()['COUNT'] -= STATUS_LIMIT
                 globals()['PAGE_NO'] -= 1
-            START = COUNT
-        for index, download in enumerate(list(download_dict.values())[START:], start=1):
+        for index, download in enumerate(list(download_dict.values())[COUNT:], start=1):
             msg += f"<b>❖ Name:</b> <code>{escape(str(download.name()))}</code>"
             msg += f"\n<b>❖ Status:</b> <i>{download.status()}</i>"
             if download.status() not in [
@@ -134,7 +130,7 @@ def get_readable_message():
                 MirrorStatus.STATUS_SPLITTING,
                 MirrorStatus.STATUS_SEEDING,
             ]:
-                msg += f"\n{get_progress_bar_string(download)} {download.progress()}"
+                msg += f"\n{get_progress_bar_string(download)} ~ {download.progress()}"
                 if download.status() == MirrorStatus.STATUS_CLONING:
                     msg += f"\n<b>❖ Cloned:</b> {get_readable_file_size(download.processed_bytes())} of {download.size()}"
                 elif download.status() == MirrorStatus.STATUS_UPLOADING:
@@ -152,12 +148,12 @@ def get_readable_message():
                            f" | <b>Leechers:</b> {download.torrent_info().num_leechs}"
                 except:
                     pass
-                    msg += f"\n<b>❖ User:</b> <code>/{BotCommands.InfoCommand}{download.message.from_user.id}</code>"
+                msg += f"\n<b>❖ User:</b> <code>/{BotCommands.InfoCommand}{download.message.from_user.id}</code>"
                 msg += f"\n<b>❖ To Stop:</b> <code>/{BotCommands.CancelMirror} {download.gid()}</code>"
             elif download.status() == MirrorStatus.STATUS_SEEDING:
                 msg += f"\n<b>❖ Size: </b>{download.size()}"
                 msg += f"\n<b>❖ Speed: </b>{get_readable_file_size(download.torrent_info().upspeed)}/s"
-                msg += f" | <b>❖ Uploaded: </b>{get_readable_file_size(download.torrent_info().uploaded)}"
+                msg += f" | <b>Uploaded: </b>{get_readable_file_size(download.torrent_info().uploaded)}"
                 msg += f"\n<b>❖ Ratio: </b>{round(download.torrent_info().ratio, 3)}"
                 msg += f" | <b>Time: </b>{get_readable_time(download.torrent_info().seeding_time)}"
                 msg += f"\n<b>❖ User:</b> <code>/{BotCommands.InfoCommand}{download.message.from_user.id}</code>"
@@ -167,9 +163,10 @@ def get_readable_message():
             msg += "\n\n"
             if STATUS_LIMIT is not None and index == STATUS_LIMIT:
                 break
-        free = get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)
-        currentTime = get_readable_time(time() - botStartTime)
-        bmsg = f"<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {free}"
+        bmsg = f"<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
+        bmsg += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {get_readable_time(time() - botStartTime)}"
+        dlspeed_bytes = 0
+        upspeed_bytes = 0
         for download in list(download_dict.values()):
             spd = download.speed()
             if download.status() == MirrorStatus.STATUS_DOWNLOADING:
@@ -182,10 +179,7 @@ def get_readable_message():
                     upspeed_bytes += float(spd.split('K')[0]) * 1024
                 elif 'MB/s' in spd:
                     upspeed_bytes += float(spd.split('M')[0]) * 1048576
-        dlspeed = get_readable_file_size(dlspeed_bytes)
-        upspeed = get_readable_file_size(upspeed_bytes)
-        bmsg += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {currentTime}"
-        bmsg += f"\n<b>DL:</b> {dlspeed}/s | <b>UL:</b> {upspeed}/s"
+        bmsg += f"\n<b>DL:</b> {get_readable_file_size(dlspeed_bytes)}/s | <b>UL:</b> {get_readable_file_size(upspeed_bytes)}/s"
         if STATUS_LIMIT is not None and tasks > STATUS_LIMIT:
             msg += f"<b>Page:</b> {PAGE_NO}/{pages} | <b>Tasks:</b> {tasks}\n"
             buttons = ButtonMaker()
@@ -248,15 +242,6 @@ def is_gdtot_link(url: str):
 
 def is_mega_link(url: str):
     return "mega.nz" in url or "mega.co.nz" in url
-
-def get_mega_link_type(url: str):
-    if "folder" in url:
-        return "folder"
-    elif "file" in url:
-        return "file"
-    elif "/#F!" in url:
-        return "folder"
-    return "file"
 
 def is_magnet(url: str):
     magnet = findall(MAGNET_REGEX, url)
